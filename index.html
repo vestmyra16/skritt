@@ -53,9 +53,19 @@
     let isTracking = false;
 
     function initMap() {
+        // Vi fjerner zoomControl for et rent utseende på mobil
         map = L.map('map', { zoomControl: false }).setView([59.91, 10.75], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        path = L.polyline([], {color: '#00ff88', weight: 6, opacity: 0.8}).addTo(map);
+        
+        // NYTT: Standard fargerike kart fra OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        path = L.polyline([], {color: '#ff4444', weight: 6, opacity: 0.8}).addTo(map);
+        
+        // Prøv å finn posisjonen din med en gang appen åpnes
+        map.locate({setView: true, maxZoom: 16});
+        
         updateHistoryDisplay();
     }
 
