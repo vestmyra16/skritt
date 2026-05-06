@@ -92,19 +92,39 @@
         if (totalDistance > 0) saveTrip(totalDistance.toFixed(2));
     }
 
+    let userMarker; // Denne holder styr på den blå prikken
+
     function updatePosition(position) {
         const { latitude, longitude } = position.coords;
         const newPos = [latitude, longitude];
 
-        if (coordinates.length > 0) {
-            const lastPos = coordinates[coordinates.length - 1];
-            totalDistance += getDistance(lastPos[0], lastPos[1], latitude, longitude);
-            document.getElementById('dist').innerText = totalDistance.toFixed(2);
+        // 1. Oppdater eller lag den blå prikken
+        if (!userMarker) {
+            userMarker = L.circleMarker(newPos, {
+                radius: 8,
+                fillColor: "#007bff",
+                color: "white",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map);
+        } else {
+            userMarker.setLatLng(newPos);
         }
 
-        coordinates.push(newPos);
-        path.setLatLngs(coordinates);
-        map.panTo(newPos);
+        // 2. Tegn ruta og regn ut km hvis vi tracker
+        if (isTracking) {
+            if (coordinates.length > 0) {
+                const lastPos = coordinates[coordinates.length - 1];
+                totalDistance += getDistance(lastPos[0], lastPos[1], latitude, longitude);
+                document.getElementById('dist').innerText = totalDistance.toFixed(2);
+            }
+            coordinates.push(newPos);
+            path.setLatLngs(coordinates);
+        }
+
+        // 3. Sentrer kartet på deg
+        map.setView(newPos, 16);
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
