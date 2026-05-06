@@ -45,8 +45,20 @@
         <div id="historyList"></div>
     </div>
 </div>
+   
 
-<script>
+
+
+    // Lim det inn her, på innsiden av <script>
+    navigator.geolocation.watchPosition(updatePosition, (err) => {
+        console.warn('GPS-feil: ' + err.message);
+    }, {
+        enableHighAccuracy: true,
+        maximumAge: 0
+    });
+
+   
+
     let map, path, watchId;
     let coordinates = [];
     let totalDistance = 0;
