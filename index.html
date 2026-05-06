@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tursporer</title>
+    
+    <!-- iPhone App instillinger -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tursporer">
+    <!-- Bruk bildet jeg laget som ikon ved å lagre det som 'icon.png' og legge det i samme mappe -->
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        :root { --primary: #00ff88; --dark: #1a1a1a; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--dark); color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #header { padding: 40px 20px 20px; text-align: center; background: rgba(0,0,0,0.8); border-bottom: 1px solid #333; }
+        .stats { font-size: 2.5rem; font-weight: 800; color: var(--primary); }
+        #map { flex-grow: 1; width: 100%; }
+        .controls { padding: 20px; background: #222; display: flex; flex-direction: column; gap: 10px; }
+        button { padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 12px; border: none; cursor: pointer; transition: 0.2s; }
+        .start-btn { background: var(--primary); color: black; }
+        .history-container { max-height: 150px; overflow-y: auto; background: #111; padding: 10px; border-radius: 8px; font-size: 0.9rem; }
+        .history-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <div class="stats"><span id="dist">0.00</span> <small style="font-size: 1rem;">km</small></div>
+    <div id="status">Klar for tur</div>
+</div>
+
+<div id="map"></div>
+
+<div class="controls">
+    <button id="startBtn" class="start-btn" onclick="toggleTracking()">START TUR</button>
+    
+    <div class="history-container" id="history">
+        <strong style="display:block; margin-bottom: 5px;">Siste turer:</strong>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<script>
+    let map, path, watchId;
+    let coordinates = [];
+    let totalDistance = 0;
+    let isTracking = false;
+
+    function initMap() {
+        map = L.map('map', { zoomControl: false }).setView([59.91, 10.75], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        path = L.polyline([], {color: '#00ff88', weight: 6, opacity: 0.8}).addTo(map);
+        updateHistoryDisplay();
+    }
+
+    function toggleTracking() {
+        if (!isTracking) {
+            coordinates = [];
+            totalDistance = 0;
+            path.setLatLngs([]);
+            isTracking = true;
+            document.getElementById('startBtn').innerText = "STOPP OG LAGRE";
+            document.getElementById('startBtn').style.background = "#ff4444";
+            watchId = navigator.geolocation.watchPosition(updatePosition, null, {enableHighAccuracy: true});
+        } else {
+            stopTracking();
+        }
+    }
+
+    function stopTracking() {
+        navigator.geolocation.clearWatch(watchId);
+        isTracking = false;
+        document.getElementById('startBtn').innerText = "START NY TUR";
+        document.getElementById('startBtn').style.background = "#00ff88";
+        
+        if (totalDistance > 0) saveTrip(totalDistance.toFixed(2));
+    }
+
+    function updatePosition(position) {
+        const { latitude, longitude } = position.coords;
+        const newPos = [latitude, longitude];
+
+        if (coordinates.length > 0) {
+            const lastPos = coordinates[coordinates.length - 1];
+            totalDistance += getDistance(lastPos[0], lastPos[1], latitude, longitude);
+            document.getElementById('dist').innerText = totalDistance.toFixed(2);
+        }
+
+        coordinates.push(newPos);
+        path.setLatLngs(coordinates);
+        map.panTo(newPos);
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function saveTrip(dist) {
+        let history = JSON.parse(localStorage.getItem('turHistory') || "[]");
+        const date = new Date().toLocaleDateString('no-NO', {day:'numeric', month:'short'});
+        history.unshift({ date, dist });
+        localStorage.setItem('turHistory', JSON.stringify(history.slice(0, 10)));
+        updateHistoryDisplay();
+    }
+
+    function updateHistoryDisplay() {
+        let history = JSON.parse(localStorage.getItem('turHistory') || "[]");
+        document.getElementById('historyList').innerHTML = history.map(t => 
+            `<div class="history-item"><span>${t.date}</span> <b>${t.dist} km</b></div>`
+        ).join('');
+    }
+
+    initMap();
+</script>
+</body>
+</html>
