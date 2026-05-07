@@ -170,8 +170,8 @@
         map = L.map('map', { zoomControl: false }).setView([67.26, 15.39], 13);
 
         // Bruker Kartverket Topo4 for koter, stier og terreng i Norge
-        L.tileLayer('https://opencache.statkart.no/gatekeeper/gk/gk.open_gpts?layers=topo4&z={z}&y={y}&x={x}', {
-    attribution: '&copy; Kartverket'
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
         path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
