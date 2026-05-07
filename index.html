@@ -171,8 +171,8 @@
 
         // Bruker Kartverket Topo4 for koter, stier og terreng i Norge
         L.tileLayer('https://opencache.statkart.no/gatekeeper/gk/gk.open_gpts?layers=topo4&z={z}&y={y}&x={x}', {
-            attribution: '&copy; Kartverket'
-        }).addTo(map);
+    attribution: '&copy; Kartverket'
+}).addTo(map);
 
         path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
     }
