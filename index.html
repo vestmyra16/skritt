@@ -3,166 +3,238 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tursporer</title>
+    <title>Tursporer PWA</title>
     
-    <!-- iPhone App instillinger -->
+    <!-- PWA meta tags for iOS og Android -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tursporer">
-    <!-- Bruk bildet jeg laget som ikon ved å lagre det som 'icon.png' og legge det i samme mappe -->
-<link rel="apple-touch-icon" href="icon_ny_v2.png">
-
+    
+    <!-- Leaflet Kart CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    
     <style>
-        :root { --primary: #00ff88; --dark: #1a1a1a; }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--dark); color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #header { padding: 40px 20px 20px; text-align: center; background: rgba(0,0,0,0.8); border-bottom: 1px solid #333; }
-        .stats { font-size: 2.5rem; font-weight: 800; color: var(--primary); }
-        #map { flex-grow: 1; width: 100%; }
-        .controls { padding: 20px; background: #222; display: flex; flex-direction: column; gap: 10px; }
-        button { padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 12px; border: none; cursor: pointer; transition: 0.2s; }
-        .start-btn { background: var(--primary); color: black; }
-        .history-container { max-height: 150px; overflow-y: auto; background: #111; padding: 10px; border-radius: 8px; font-size: 0.9rem; }
-        .history-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+        :root {
+            --primary: #007bff;
+            --danger: #dc3545;
+            --dark: #121212;
+            --card-bg: rgba(30, 30, 30, 0.9);
+            --text: #ffffff;
+        }
+
+        body, html { 
+            margin: 0; padding: 0; height: 100%; width: 100%; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--dark);
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        #map { height: 100%; width: 100%; z-index: 1; }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .header-stats {
+            top: 0; left: 0; right: 0;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            padding: 20px 10px;
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 1px solid #333;
+            pointer-events: auto;
+        }
+
+        .stat-box { text-align: center; }
+        .stat-val { font-size: 1.5rem; font-weight: 800; color: #00ff88; display: block; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
+
+        .controls {
+            bottom: 40px; left: 0; right: 0;
+            display: flex; justify-content: center;
+            pointer-events: auto;
+        }
+
+        button {
+            padding: 18px 45px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            cursor: pointer;
+            transition: 0.2s;
+            color: white;
+        }
+
+        .btn-start { background: var(--primary); }
+        .btn-stop { background: var(--danger); }
+        button:active { transform: scale(0.95); }
+
+        /* Passord-skjerm */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-card {
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            width: 80%;
+            max-width: 300px;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: white;
+            font-size: 1.1rem;
+            box-sizing: border-box;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
 
-<div id="header">
-    <div class="stats"><span id="dist">0.00</span> <small style="font-size: 1rem;">km</small></div>
-    <div id="status">Klar for tur</div>
+<div id="login-screen">
+    <div class="login-card">
+        <h2>🔒 Låst Tur-App</h2>
+        <p style="opacity:0.7">Vennligst skriv inn passord</p>
+        <input type="password" id="pwInput" placeholder="Passord...">
+        <button class="btn-start" onclick="unlock()">Lås opp</button>
+    </div>
+</div>
+
+<div class="overlay header-stats">
+    <div class="stat-box">
+        <span class="stat-val" id="dist">0.00</span>
+        <span class="stat-label">KM</span>
+    </div>
+    <div class="stat-box">
+        <span class="stat-val" id="elev">--</span>
+        <span class="stat-label">M.O.H</span>
+    </div>
+    <div class="stat-box">
+        <span class="stat-val" id="gain">0</span>
+        <span class="stat-label">STIGNING</span>
+    </div>
 </div>
 
 <div id="map"></div>
 
-<div class="controls">
-    <button id="startBtn" class="start-btn" onclick="toggleTracking()">START TUR</button>
-    
-    <div class="history-container" id="history">
-        <strong style="display:block; margin-bottom: 5px;">Siste turer:</strong>
-        <div id="historyList"></div>
-    </div>
+<div class="overlay controls">
+    <button id="mainBtn" class="btn-start" onclick="toggleTracking()">START TUR</button>
 </div>
-   
 
-
-
-    // Lim det inn her, på innsiden av <script>
-    navigator.geolocation.watchPosition(updatePosition, (err) => {
-        console.warn('GPS-feil: ' + err.message);
-    }, {
-        enableHighAccuracy: true,
-        maximumAge: 0
-    });
-
-   
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // KONFIGURASJON
+    const HEMMELIG_PASSORD = "Fjell"; // Du kan endre dette her
 
     let map, path, watchId;
-    let coordinates = [];
-    let totalDistance = 0;
+    let coords = [];
+    let totalDist = 0;
+    let totalGain = 0;
+    let lastAlt = null;
     let isTracking = false;
 
+    function unlock() {
+        const val = document.getElementById('pwInput').value;
+        if (val === HEMMELIG_PASSORD) {
+            document.getElementById('login-screen').style.display = 'none';
+            initMap();
+        } else {
+            alert("Feil passord!");
+        }
+    }
+
     function initMap() {
-        // Vi fjerner zoomControl for et rent utseende på mobil
-        map = L.map('map', { zoomControl: false }).setView([59.91, 10.75], 13);
-        
-        // NYTT: Standard fargerike kart fra OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        // Starter kartet sentrert på Nordland/Fauske-området
+        map = L.map('map', { zoomControl: false }).setView([67.26, 15.39], 13);
+
+        // Bruker Kartverket Topo4 for koter, stier og terreng i Norge
+        L.tileLayer('https://opencache.statkart.no/gatekeeper/gk/gk.open_gpts?layers=topo4&z={z}&y={y}&x={x}', {
+            attribution: '&copy; Kartverket'
         }).addTo(map);
-        
-        path = L.polyline([], {color: '#ff4444', weight: 6, opacity: 0.8}).addTo(map);
-        
-        // Prøv å finn posisjonen din med en gang appen åpnes
-        map.locate({setView: true, maxZoom: 16});
-        
-        updateHistoryDisplay();
+
+        path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
     }
 
     function toggleTracking() {
         if (!isTracking) {
-            coordinates = [];
-            totalDistance = 0;
-            path.setLatLngs([]);
+            if (!navigator.geolocation) return alert("Ingen GPS-støtte");
             isTracking = true;
-            document.getElementById('startBtn').innerText = "STOPP OG LAGRE";
-            document.getElementById('startBtn').style.background = "#ff4444";
-            watchId = navigator.geolocation.watchPosition(updatePosition, null, {enableHighAccuracy: true});
+            document.getElementById('mainBtn').innerText = "STOPP TUR";
+            document.getElementById('mainBtn').className = "btn-stop";
+            
+            watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
+                enableHighAccuracy: true,
+                maximumAge: 1000
+            });
         } else {
-            stopTracking();
+            navigator.geolocation.clearWatch(watchId);
+            isTracking = false;
+            document.getElementById('mainBtn').innerText = "START TUR";
+            document.getElementById('mainBtn').className = "btn-start";
+            lastAlt = null;
         }
     }
 
-    function stopTracking() {
-        navigator.geolocation.clearWatch(watchId);
-        isTracking = false;
-        document.getElementById('startBtn').innerText = "START NY TUR";
-        document.getElementById('startBtn').style.background = "#00ff88";
-        
-        if (totalDistance > 0) saveTrip(totalDistance.toFixed(2));
-    }
+    function update(pos) {
+        const { latitude, longitude, altitude } = pos.coords;
+        const current = [latitude, longitude];
 
-    let userMarker; // Denne holder styr på den blå prikken
-
-    function updatePosition(position) {
-        const { latitude, longitude } = position.coords;
-        const newPos = [latitude, longitude];
-
-        // 1. Oppdater eller lag den blå prikken
-        if (!userMarker) {
-            userMarker = L.circleMarker(newPos, {
-                radius: 8,
-                fillColor: "#007bff",
-                color: "white",
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 1
-            }).addTo(map);
-        } else {
-            userMarker.setLatLng(newPos);
-        }
-
-        // 2. Tegn ruta og regn ut km hvis vi tracker
-        if (isTracking) {
-            if (coordinates.length > 0) {
-                const lastPos = coordinates[coordinates.length - 1];
-                totalDistance += getDistance(lastPos[0], lastPos[1], latitude, longitude);
-                document.getElementById('dist').innerText = totalDistance.toFixed(2);
+        // Høyde og stigning
+        if (altitude !== null) {
+            const roundedAlt = Math.round(altitude);
+            document.getElementById('elev').innerText = roundedAlt;
+            if (lastAlt !== null && roundedAlt > lastAlt) {
+                totalGain += (roundedAlt - lastAlt);
+                document.getElementById('gain').innerText = totalGain;
             }
-            coordinates.push(newPos);
-            path.setLatLngs(coordinates);
+            lastAlt = roundedAlt;
         }
 
-        // 3. Sentrer kartet på deg
-        map.setView(newPos, 16);
+        // Distanseberegning
+        if (coords.length > 0) {
+            const prev = coords[coords.length - 1];
+            const d = getDist(prev[0], prev[1], latitude, longitude);
+            if (d > 0.005) { // Bare tell bevegelser over 5 meter
+                totalDist += d;
+                document.getElementById('dist').innerText = totalDist.toFixed(2);
+            }
+        }
+
+        coords.push(current);
+        path.setLatLngs(coords);
+        map.panTo(current);
     }
 
-    function getDistance(lat1, lon1, lat2, lon2) {
+    function getDist(lat1, lon1, lat2, lon2) {
         const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+        const dLat = (lat2-lat1)*Math.PI/180;
+        const dLon = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
-
-    function saveTrip(dist) {
-        let history = JSON.parse(localStorage.getItem('turHistory') || "[]");
-        const date = new Date().toLocaleDateString('no-NO', {day:'numeric', month:'short'});
-        history.unshift({ date, dist });
-        localStorage.setItem('turHistory', JSON.stringify(history.slice(0, 10)));
-        updateHistoryDisplay();
-    }
-
-    function updateHistoryDisplay() {
-        let history = JSON.parse(localStorage.getItem('turHistory') || "[]");
-        document.getElementById('historyList').innerHTML = history.map(t => 
-            `<div class="history-item"><span>${t.date}</span> <b>${t.dist} km</b></div>`
-        ).join('');
-    }
-
-    initMap();
 </script>
+
 </body>
 </html>
