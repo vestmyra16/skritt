@@ -1,21 +1,15 @@
 <!DOCTYPE html>
 <html lang="no">
 <head>
-    <!-- Dette gir appen et skikkelig ikon på iPhone/Android -->
-<link rel="apple-touch-icon" href="icon_ny_v2.png">
-<link rel="icon" type="image/png" href="icon_ny_v2.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tursporer PWA</title>
+    <title>Tursporer Pro</title>
     
-    <!-- PWA meta tags for iOS og Android -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Tursporer">
+    <link rel="apple-touch-icon" href="icon_ny_v2.png">
+    <link rel="icon" type="image/png" href="icon_ny_v2.png">
     
-    <!-- Leaflet Kart CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <style>
         :root {
             --primary: #007bff;
@@ -25,8 +19,8 @@
             --text: #ffffff;
         }
 
-        body, html { 
-            margin: 0; padding: 0; height: 100%; width: 100%; 
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: var(--dark);
             overflow: hidden;
@@ -35,13 +29,9 @@
 
         #map { height: 100%; width: 100%; z-index: 1; }
 
-        /* UI Overlays */
-        .overlay {
-            position: absolute;
-            z-index: 1000;
-            pointer-events: none;
-        }
+        .overlay { position: absolute; z-index: 1000; pointer-events: none; }
 
+        /* Topp-statistikk */
         .header-stats {
             top: 0; left: 0; right: 0;
             background: var(--card-bg);
@@ -53,191 +43,182 @@
             pointer-events: auto;
         }
 
-        .stat-box { text-align: center; }
+        .stat-box { flex: 1; text-align: center; }
         .stat-val { font-size: 1.5rem; font-weight: 800; color: #00ff88; display: block; }
         .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
 
+        /* Kontroller i bunn */
         .controls {
             bottom: 40px; left: 0; right: 0;
-            display: flex; justify-content: center;
+            display: flex; flex-direction: column;
+            align-items: center; gap: 10px;
             pointer-events: auto;
         }
 
+        .btn-group { display: flex; gap: 10px; justify-content: center; width: 90%; }
+
         button {
-            padding: 18px 45px;
+            padding: 18px 30px;
             font-size: 1.1rem;
             font-weight: bold;
             border: none;
             border-radius: 50px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
             cursor: pointer;
-            transition: 0.2s;
             color: white;
+            transition: 0.2s;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
         }
 
         .btn-start { background: var(--primary); }
         .btn-stop { background: var(--danger); }
+        .btn-new { background: #6c757d; }
+        .btn-print { background: #28a745; font-size: 0.9rem; padding: 10px 20px; }
+        
         button:active { transform: scale(0.95); }
 
-        /* Passord-skjerm */
+        /* Passordskjerm */
         #login-screen {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--dark);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-
-        .login-card {
-            background: #1e1e1e;
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            width: 80%;
-            max-width: 300px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 9999; pointer-events: auto;
         }
 
         input[type="password"] {
-            width: 100%;
-            padding: 12px;
-            margin: 20px 0;
-            border-radius: 10px;
-            border: 1px solid #444;
-            background: #2a2a2a;
-            color: white;
-            font-size: 1.1rem;
-            box-sizing: border-box;
-            text-align: center;
+            padding: 15px; border-radius: 10px; border: none;
+            margin-bottom: 20px; width: 200px; text-align: center; font-size: 1.2rem;
         }
     </style>
 </head>
 <body>
 
-<div id="login-screen">
-    <div class="login-card">
-        <h2>🔒 Låst Tur-App</h2>
-        <p style="opacity:0.7">Vennligst skriv inn passord</p>
+    <div id="login-screen">
+        <h2 style="margin-bottom: 30px;">Tursporer Pro</h2>
         <input type="password" id="pwInput" placeholder="Passord...">
         <button class="btn-start" onclick="unlock()">Lås opp</button>
     </div>
-</div>
 
-<div class="overlay header-stats">
-    <div class="stat-box">
-        <span class="stat-val" id="dist">0.00</span>
-        <span class="stat-label">KM</span>
+    <div class="overlay header-stats">
+        <div class="stat-box"><span class="stat-val" id="dist">0.00</span><span class="stat-label">KM</span></div>
+        <div class="stat-box"><span class="stat-val" id="steps">0</span><span class="stat-label">SKRITT</span></div>
+        <div class="stat-box"><span class="stat-val" id="elev">--</span><span class="stat-label">M.O.H</span></div>
+        <div class="stat-box"><span class="stat-val" id="gain">0</span><span class="stat-label">STIGNING</span></div>
     </div>
-    <div class="stat-box">
-        <span class="stat-val" id="elev">--</span>
-        <span class="stat-label">M.O.H</span>
+
+    <div id="map"></div>
+
+    <div class="overlay controls">
+        <div class="btn-group">
+            <button id="startBtn" class="btn-start" onclick="startTracking()">START</button>
+            <button id="stopBtn" class="btn-stop" onclick="stopTracking()" style="display:none;">STOPP</button>
+            <button id="resetBtn" class="btn-new" onclick="resetTour()">NY TUR (CSV)</button>
+        </div>
+        <button class="btn-print" onclick="window.print()">LAGRE BILDE</button>
     </div>
-    <div class="stat-box">
-        <span class="stat-val" id="gain">0</span>
-        <span class="stat-label">STIGNING</span>
-    </div>
-</div>
 
-<div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const HEMMELIG_PASSORD = "Fjell";
+        let map, path, watchId;
+        let coords = [];
+        let totalDist = 0;
+        let totalGain = 0;
+        let lastAlt = null;
+        let isTracking = false;
+        let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
-<div class="overlay controls">
-    <button id="mainBtn" class="btn-start" onclick="toggleTracking()">START TUR</button>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    // KONFIGURASJON
-    const HEMMELIG_PASSORD = "Fjell"; // Du kan endre dette her
-
-    let map, path, watchId;
-    let coords = [];
-    let totalDist = 0;
-    let totalGain = 0;
-    let lastAlt = null;
-    let isTracking = false;
-
-    function unlock() {
-        const val = document.getElementById('pwInput').value;
-        if (val === HEMMELIG_PASSORD) {
-            document.getElementById('login-screen').style.display = 'none';
-            initMap();
-        } else {
-            alert("Feil passord!");
+        function unlock() {
+            const val = document.getElementById('pwInput').value;
+            if (val === HEMMELIG_PASSORD) {
+                document.getElementById('login-screen').style.display = 'none';
+                initMap();
+            } else {
+                alert("Feil passord!");
+            }
         }
-    }
 
-    function initMap() {
-        // Starter kartet sentrert på Nordland/Fauske-området
-        map = L.map('map', { zoomControl: false }).setView([67.26, 15.39], 13);
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
 
-        // Bruker Kartverket Topo4 for koter, stier og terreng i Norge
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+            path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
+        }
 
-        path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
-    }
-
-    function toggleTracking() {
-        if (!isTracking) {
-            if (!navigator.geolocation) return alert("Ingen GPS-støtte");
+        function startTracking() {
             isTracking = true;
-            document.getElementById('mainBtn').innerText = "STOPP TUR";
-            document.getElementById('mainBtn').className = "btn-stop";
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'inline-block';
             
             watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
                 enableHighAccuracy: true,
                 maximumAge: 1000
             });
-        } else {
-            navigator.geolocation.clearWatch(watchId);
+        }
+
+        function stopTracking() {
             isTracking = false;
-            document.getElementById('mainBtn').innerText = "START TUR";
-            document.getElementById('mainBtn').className = "btn-start";
-            lastAlt = null;
-        }
-    }
-
-    function update(pos) {
-        const { latitude, longitude, altitude } = pos.coords;
-        const current = [latitude, longitude];
-
-        // Høyde og stigning
-        if (altitude !== null) {
-            const roundedAlt = Math.round(altitude);
-            document.getElementById('elev').innerText = roundedAlt;
-            if (lastAlt !== null && roundedAlt > lastAlt) {
-                totalGain += (roundedAlt - lastAlt);
-                document.getElementById('gain').innerText = totalGain;
-            }
-            lastAlt = roundedAlt;
+            navigator.geolocation.clearWatch(watchId);
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
         }
 
-        // Distanseberegning
-        if (coords.length > 0) {
-            const prev = coords[coords.length - 1];
-            const d = getDist(prev[0], prev[1], latitude, longitude);
-            if (d > 0.005) { // Bare tell bevegelser over 5 meter
-                totalDist += d;
-                document.getElementById('dist').innerText = totalDist.toFixed(2);
+        function resetTour() {
+            if(confirm("Vil du avslutte turen, laste ned CSV-fil og starte på nytt?")) {
+                downloadCSV();
+                location.reload(); 
             }
         }
 
-        coords.push(current);
-        path.setLatLngs(coords);
-        map.panTo(current);
-    }
+        function downloadCSV() {
+            let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(",")).join("\n");
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "tur_logg.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
 
-    function getDist(lat1, lon1, lat2, lon2) {
-        const R = 6371;
-        const dLat = (lat2-lat1)*Math.PI/180;
-        const dLon = (lon2-lon1)*Math.PI/180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-</script>
+        function update(pos) {
+            if (!isTracking) return;
 
+            const { latitude, longitude, altitude } = pos.coords;
+            const newPos = [latitude, longitude];
+
+            // Oppdater høyde og stigning
+            if (altitude !== null) {
+                document.getElementById('elev').innerText = Math.round(altitude);
+                if (lastAlt !== null && altitude > lastAlt) {
+                    totalGain += (altitude - lastAlt);
+                    document.getElementById('gain').innerText = Math.round(totalGain);
+                }
+                lastAlt = altitude;
+            }
+
+            // Beregn distanse
+            if (coords.length > 0) {
+                const lastPos = L.latLng(coords[coords.length - 1]);
+                const dist = lastPos.distanceTo(L.latLng(newPos)) / 1000;
+                if (dist > 0.002) { // Bare oppdater hvis man har flyttet seg litt
+                    totalDist += dist;
+                    document.getElementById('dist').innerText = totalDist.toFixed(2);
+                    document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+                }
+            }
+
+            coords.push(newPos);
+            path.setLatLngs(coords);
+            map.setView(newPos);
+            
+            // Lagre til CSV
+            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
+
+            // Vis markør for nåværende posisjon
+            L.circleMarker(newPos, {radius: 8, color: '#fff', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
+        }
+    </script>
 </body>
 </html>
