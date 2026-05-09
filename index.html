@@ -28,10 +28,8 @@
         }
 
         #map { height: 100%; width: 100%; z-index: 1; }
-
         .overlay { position: absolute; z-index: 1000; pointer-events: none; }
 
-        /* Topp-statistikk */
         .header-stats {
             top: 0; left: 0; right: 0;
             background: var(--card-bg);
@@ -47,7 +45,6 @@
         .stat-val { font-size: 1.5rem; font-weight: 800; color: #00ff88; display: block; }
         .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
 
-        /* Kontroller i bunn */
         .controls {
             bottom: 40px; left: 0; right: 0;
             display: flex; flex-direction: column;
@@ -76,7 +73,6 @@
         
         button:active { transform: scale(0.95); }
 
-        /* Passordskjerm */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--dark);
@@ -120,7 +116,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const HEMMELIG_PASSORD = "Fjell";
-        let map, path, watchId;
+        let map, path, watchId, wakeLock = null;
         let coords = [];
         let totalDist = 0;
         let totalGain = 0;
@@ -147,26 +143,34 @@
             path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
         }
 
-        function startTracking() {
+        async function startTracking() {
             isTracking = true;
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'inline-block';
+
+            // Forsøk å holde skjermen våken
+            if ('wakeLock' in navigator) {
+                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+            }
             
+            // Maksimal presisjon og hyppighet
             watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
                 enableHighAccuracy: true,
-                maximumAge: 1000
+                maximumAge: 0,
+                timeout: 5000
             });
         }
 
         function stopTracking() {
             isTracking = false;
             navigator.geolocation.clearWatch(watchId);
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
             document.getElementById('startBtn').style.display = 'inline-block';
             document.getElementById('stopBtn').style.display = 'none';
         }
 
         function resetTour() {
-            if(confirm("Vil du avslutte turen, laste ned CSV-fil og starte på nytt?")) {
+            if(confirm("Vil du avslutte turen og starte på nytt?")) {
                 downloadCSV();
                 location.reload(); 
             }
@@ -185,39 +189,41 @@
         function update(pos) {
             if (!isTracking) return;
 
-            const { latitude, longitude, altitude } = pos.coords;
+            const { latitude, longitude, altitude, accuracy } = pos.coords;
+            
+            // Ignorer punkter med veldig dårlig nøyaktighet (over 30 meter)
+            if (accuracy > 30) return;
+
             const newPos = [latitude, longitude];
 
-            // Oppdater høyde og stigning
             if (altitude !== null) {
                 document.getElementById('elev').innerText = Math.round(altitude);
-                if (lastAlt !== null && altitude > lastAlt) {
+                if (lastAlt !== null && (altitude - lastAlt) > 1) {
                     totalGain += (altitude - lastAlt);
                     document.getElementById('gain').innerText = Math.round(totalGain);
                 }
                 lastAlt = altitude;
             }
 
-            // Beregn distanse
             if (coords.length > 0) {
                 const lastPos = L.latLng(coords[coords.length - 1]);
                 const dist = lastPos.distanceTo(L.latLng(newPos)) / 1000;
-                if (dist > 0.002) { // Bare oppdater hvis man har flyttet seg litt
+                
+                // Registrer bare hvis vi har flyttet oss minst 3 meter
+                if (dist > 0.003) { 
                     totalDist += dist;
                     document.getElementById('dist').innerText = totalDist.toFixed(2);
                     document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+                    
+                    coords.push(newPos);
+                    path.setLatLngs(coords);
+                    map.setView(newPos);
+                    tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
                 }
+            } else {
+                coords.push(newPos);
+                tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
             }
-
-            coords.push(newPos);
-            path.setLatLngs(coords);
-            map.setView(newPos);
-            
-            // Lagre til CSV
-            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
-
-            // Vis markør for nåværende posisjon
-            L.circleMarker(newPos, {radius: 8, color: '#fff', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
         }
     </script>
 </body>
