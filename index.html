@@ -135,13 +135,16 @@
         }
 
         function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+    // Vi setter opp kartet
+    map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
 
-            path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
-        }
+    // Her henter vi Topo4 fra Kartverket
+    L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+        attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>'
+    }).addTo(map);
+
+    path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
+}
 
         async function startTracking() {
             isTracking = true;
