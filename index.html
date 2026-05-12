@@ -193,6 +193,36 @@
             if (!isTracking) return;
 
             const { latitude, longitude, altitude, accuracy } = pos.coords;
+           
+    
+    // FILTRET: 
+    // 1. Vi ignorerer punkter med dårlig nøyaktighet (over 20 meter)
+    if (accuracy > 20) return;
+
+    const newPos = [latitude, longitude];
+
+    if (coords.length > 0) {
+        const lastPos = L.latLng(coords[coords.length - 1]);
+        const dist = lastPos.distanceTo(L.latLng(newPos)); // meter
+        
+        // 2. Vi ignorerer "hopp" som er fysisk umulige (f.eks over 50 meter på ett sekund)
+        if (dist > 50) return; 
+
+        // 3. Vi tegner bare hvis vi faktisk har flyttet oss litt (minst 2 meter)
+        if (dist < 2) return; 
+        
+        totalDist += (dist / 1000);
+        document.getElementById('dist').innerText = totalDist.toFixed(2);
+        document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+    }
+
+    coords.push(newPos);
+    path.setLatLngs(coords);
+    map.setView(newPos);
+    
+    // Oppdater høyde og CSV som før...
+    // ... resten av koden din ...
+}
             
             // Ignorer punkter med veldig dårlig nøyaktighet (over 30 meter)
             if (accuracy > 30) return;
