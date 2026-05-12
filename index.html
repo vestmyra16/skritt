@@ -124,9 +124,9 @@
         let isTracking = false;
         let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
-        function unlock() {
-            const val = document.getElementById('pwInput').value;
-            if (val === HEMMELIG_PASSORD) {
+       function unlock() {
+    const val = document.getElementById('pwInput').value;
+    if (val === HEMMELIG_PASSORD) {
                 document.getElementById('login-screen').style.display = 'none';
                 initMap();
             } else {
@@ -134,9 +134,9 @@
             }
         }
 
-        function initMap() {
+        function initMap() 
     // Vi setter opp kartet
-    map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
+  map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
 
     // Her henter vi Topo4 fra Kartverket
     L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
