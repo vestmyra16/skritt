@@ -124,73 +124,79 @@
         let isTracking = false;
         let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
-     function unlock() {
-    const val = document.getElementById('pwInput').value;
-    if (val === HEMMELIG_PASSORD) {
-        document.getElementById('login-screen').style.display = 'none';
-        initMap();
-    } else {
-        alert("Feil passord!");
-    }
-}
-
-function initMap() {
-    map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
-    L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
-        attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>'
-    }).addTo(map);
-    path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
-}
-
-async function startTracking() {
-    isTracking = true;
-    document.getElementById('startBtn').style.display = 'none';
-    document.getElementById('stopBtn').style.display = 'inline-block';
-    if ('wakeLock' in navigator) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
-    }
-    watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 5000
-    });
-}
-
-function update(pos) {
-    if (!isTracking) return;
-    const { latitude, longitude, altitude, accuracy } = pos.coords;
-    if (accuracy > 20) return; 
-
-    const newPos = [latitude, longitude];
-    if (coords.length > 0) {
-        const lastPos = L.latLng(coords[coords.length - 1]);
-        const dist = lastPos.distanceTo(L.latLng(newPos));
-        if (dist > 50 || dist < 2) return; 
-        totalDist += (dist / 1000);
-        document.getElementById('dist').innerText = totalDist.toFixed(2);
-        document.getElementById('steps').innerText = Math.round(totalDist * 1315);
-    }
-    
-    if (altitude !== null) {
-        document.getElementById('elev').innerText = Math.round(altitude);
-        if (lastAlt !== null && (altitude - lastAlt) > 1) {
-            totalGain += (altitude - lastAlt);
-            document.getElementById('gain').innerText = Math.round(totalGain);
+        function unlock() {
+            const val = document.getElementById('pwInput').value;
+            if (val === HEMMELIG_PASSORD) {
+                document.getElementById('login-screen').style.display = 'none';
+                initMap();
+            } else {
+                alert("Feil passord!");
+            }
         }
-        lastAlt = altitude;
-    }
 
-    coords.push(newPos);
-    path.setLatLngs(coords);
-    map.setView(newPos);
-    tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
-}
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
+            L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+                attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>'
+            }).addTo(map);
+            path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
+        }
+
+        async function startTracking() {
+            isTracking = true;
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+            if ('wakeLock' in navigator) {
+                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+            }
+            watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        }
+
+        function stopTracking() {
+            isTracking = false;
+            navigator.geolocation.clearWatch(watchId);
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        function resetTour() {
+            if(confirm("Vil du avslutte turen og starte på nytt?")) {
+                let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(",")).join("\n");
+                let encodedUri = encodeURI(csvContent);
+                let link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "tur_logg.csv");
+                document.body.appendChild(link);
+                link.click();
+                location.reload(); 
+            }
+        }
+
+        function update(pos) {
+            if (!isTracking) return;
+            const { latitude, longitude, altitude, accuracy } = pos.coords;
             
-            // Ignorer punkter med veldig dårlig nøyaktighet (over 30 meter)
-            if (accuracy > 30) return;
+            // Filter 1: Ignorer punkter med dårlig nøyaktighet
+            if (accuracy > 20) return; 
 
             const newPos = [latitude, longitude];
+            if (coords.length > 0) {
+                const lastPos = L.latLng(coords[coords.length - 1]);
+                const dist = lastPos.distanceTo(L.latLng(newPos));
+                
+                // Filter 2: Ignorer hopp over 50m eller bevegelser under 2m (støy)
+                if (dist > 50 || dist < 2) return; 
 
+                totalDist += (dist / 1000);
+                document.getElementById('dist').innerText = totalDist.toFixed(2);
+                document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+            }
+            
             if (altitude !== null) {
                 document.getElementById('elev').innerText = Math.round(altitude);
                 if (lastAlt !== null && (altitude - lastAlt) > 1) {
@@ -200,25 +206,10 @@ function update(pos) {
                 lastAlt = altitude;
             }
 
-            if (coords.length > 0) {
-                const lastPos = L.latLng(coords[coords.length - 1]);
-                const dist = lastPos.distanceTo(L.latLng(newPos)) / 1000;
-                
-                // Registrer bare hvis vi har flyttet oss minst 3 meter
-                if (dist > 0.003) { 
-                    totalDist += dist;
-                    document.getElementById('dist').innerText = totalDist.toFixed(2);
-                    document.getElementById('steps').innerText = Math.round(totalDist * 1315);
-                    
-                    coords.push(newPos);
-                    path.setLatLngs(coords);
-                    map.setView(newPos);
-                    tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
-                }
-            } else {
-                coords.push(newPos);
-                tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
-            }
+            coords.push(newPos);
+            path.setLatLngs(coords);
+            map.setView(newPos);
+            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
         }
     </script>
 </body>
