@@ -124,104 +124,66 @@
         let isTracking = false;
         let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
-       function unlock() {
+     function unlock() {
     const val = document.getElementById('pwInput').value;
     if (val === HEMMELIG_PASSORD) {
-                document.getElementById('login-screen').style.display = 'none';
-                initMap();
-            } else {
-                alert("Feil passord!");
-            }
-        }
+        document.getElementById('login-screen').style.display = 'none';
+        initMap();
+    } else {
+        alert("Feil passord!");
+    }
+}
 
-        function initMap() 
-    // Vi setter opp kartet
-  map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
-
-    // Her henter vi Topo4 fra Kartverket
+function initMap() {
+    map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
     L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
         attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>'
     }).addTo(map);
-
     path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
 }
 
-        async function startTracking() {
-            isTracking = true;
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = 'inline-block';
+async function startTracking() {
+    isTracking = true;
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+    if ('wakeLock' in navigator) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+    }
+    watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+    });
+}
 
-            // Forsøk å holde skjermen våken
-            if ('wakeLock' in navigator) {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
-            }
-            
-            // Maksimal presisjon og hyppighet
-            watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 5000
-            });
-        }
-
-        function stopTracking() {
-            isTracking = false;
-            navigator.geolocation.clearWatch(watchId);
-            if (wakeLock) { wakeLock.release(); wakeLock = null; }
-            document.getElementById('startBtn').style.display = 'inline-block';
-            document.getElementById('stopBtn').style.display = 'none';
-        }
-
-        function resetTour() {
-            if(confirm("Vil du avslutte turen og starte på nytt?")) {
-                downloadCSV();
-                location.reload(); 
-            }
-        }
-
-        function downloadCSV() {
-            let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(",")).join("\n");
-            var encodedUri = encodeURI(csvContent);
-            var link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "tur_logg.csv");
-            document.body.appendChild(link);
-            link.click();
-        }
-
-        function update(pos) {
-            if (!isTracking) return;
-
-            const { latitude, longitude, altitude, accuracy } = pos.coords;
-           
-    
-    // FILTRET: 
-    // 1. Vi ignorerer punkter med dårlig nøyaktighet (over 20 meter)
-    if (accuracy > 20) return;
+function update(pos) {
+    if (!isTracking) return;
+    const { latitude, longitude, altitude, accuracy } = pos.coords;
+    if (accuracy > 20) return; 
 
     const newPos = [latitude, longitude];
-
     if (coords.length > 0) {
         const lastPos = L.latLng(coords[coords.length - 1]);
-        const dist = lastPos.distanceTo(L.latLng(newPos)); // meter
-        
-        // 2. Vi ignorerer "hopp" som er fysisk umulige (f.eks over 50 meter på ett sekund)
-        if (dist > 50) return; 
-
-        // 3. Vi tegner bare hvis vi faktisk har flyttet oss litt (minst 2 meter)
-        if (dist < 2) return; 
-        
+        const dist = lastPos.distanceTo(L.latLng(newPos));
+        if (dist > 50 || dist < 2) return; 
         totalDist += (dist / 1000);
         document.getElementById('dist').innerText = totalDist.toFixed(2);
         document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+    }
+    
+    if (altitude !== null) {
+        document.getElementById('elev').innerText = Math.round(altitude);
+        if (lastAlt !== null && (altitude - lastAlt) > 1) {
+            totalGain += (altitude - lastAlt);
+            document.getElementById('gain').innerText = Math.round(totalGain);
+        }
+        lastAlt = altitude;
     }
 
     coords.push(newPos);
     path.setLatLngs(coords);
     map.setView(newPos);
-    
-    // Oppdater høyde og CSV som før...
-    // ... resten av koden din ...
+    tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
 }
             
             // Ignorer punkter med veldig dårlig nøyaktighet (over 30 meter)
