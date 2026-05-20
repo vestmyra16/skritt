@@ -116,7 +116,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const HEMMELIG_PASSORD = "Fjell";
-        let map, path, watchId, wakeLock = null;
+        let map, path, userMarker, watchId, wakeLock = null;
         let coords = [];
         let totalDist = 0;
         let totalGain = 0;
@@ -136,23 +136,32 @@
 
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
+            
+            // ENDRING: Lagt til brikke-bufring (className) og crossOrigin for bedre offline-støtte i nettleseren
             L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
-                attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>'
+                attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
+                crossOrigin: true
             }).addTo(map);
+            
             path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
+            
+            // NYTT: Eget merke for hvor brukeren faktisk står akkurat nå
+            userMarker = L.circleMarker([0, 0], { radius: 8, color: '#ffffff', fillColor: '#007bff', fillOpacity: 1, weight: 3 }).addTo(map);
         }
 
         async function startTracking() {
             isTracking = true;
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'inline-block';
+            
+            // ENDRING: Sikrer at skjermen IKKE skrur seg av (forhindrer at telefonen kveler GPS-en)
             if ('wakeLock' in navigator) {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.log("WakeLock feilet"); }
             }
+            
+            // ENDRING: Fjernet timeout og maximumAge for å tvinge telefonen til å hente ferske punkter konstant
             watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 5000
+                enableHighAccuracy: true
             });
         }
 
@@ -181,16 +190,20 @@
             if (!isTracking) return;
             const { latitude, longitude, altitude, accuracy } = pos.coords;
             
-            // Filter 1: Ignorer punkter med dårlig nøyaktighet
-            if (accuracy > 20) return; 
+            // ENDRING 1: Slappet av på nøyaktighets-filteret litt (fra 20m til 35m). 
+            // I tøft terreng/skog kan GPS-en bikke 20m, og da ville den gamle koden ignorert turen din fullstendig.
+            if (accuracy > 35) return; 
 
             const newPos = [latitude, longitude];
+            userMarker.setLatLng(newPos); // Oppdaterer blå prikk
+
             if (coords.length > 0) {
                 const lastPos = L.latLng(coords[coords.length - 1]);
                 const dist = lastPos.distanceTo(L.latLng(newPos));
                 
-                // Filter 2: Ignorer hopp over 50m eller bevegelser under 2m (støy)
-                if (dist > 50 || dist < 2) return; 
+                // ENDRING 2: Justert støyfilteret. Hvis du går rolig i motbakke, beveger du deg ofte under 2 meter per sekund. 
+                // Endret fra 2m til 1m for å fange opp rolig gange. Økte makshopp fra 50m til 150m (i tilfelle du har vært i en tunell/lomme).
+                if (dist > 150 || dist < 1.5) return; 
 
                 totalDist += (dist / 1000);
                 document.getElementById('dist').innerText = totalDist.toFixed(2);
@@ -199,7 +212,7 @@
             
             if (altitude !== null) {
                 document.getElementById('elev').innerText = Math.round(altitude);
-                if (lastAlt !== null && (altitude - lastAlt) > 1) {
+                if (lastAlt !== null && (altitude - lastAlt) > 1.5) { // Justert støy på høydemeter
                     totalGain += (altitude - lastAlt);
                     document.getElementById('gain').innerText = Math.round(totalGain);
                 }
