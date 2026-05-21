@@ -70,6 +70,7 @@
         .btn-stop { background: var(--danger); }
         .btn-new { background: #6c757d; }
         .btn-print { background: #28a745; font-size: 0.9rem; padding: 10px 20px; }
+        .btn-clear { background: #ff9f43; font-size: 0.9rem; padding: 10px 20px; color: #121212; }
         
         button:active { transform: scale(0.95); }
 
@@ -91,7 +92,7 @@
 
     <div id="login-screen">
         <h2 style="margin-bottom: 30px;">Tursporer Pro</h2>
-        <input type="password" id="pwInput" placeholder="Passord...">
+        <input type="password" id="pwInput" placeholder="Passord..." autocorrect="off">
         <button class="btn-start" onclick="unlock()">Lås opp</button>
     </div>
 
@@ -110,7 +111,10 @@
             <button id="stopBtn" class="btn-stop" onclick="stopTracking()" style="display:none;">STOPP</button>
             <button id="resetBtn" class="btn-new" onclick="resetTour()">NY TUR (CSV)</button>
         </div>
-        <button class="btn-print" onclick="window.print()">LAGRE BILDE</button>
+        <div class="btn-group" style="width: auto; gap: 10px;">
+            <button class="btn-print" onclick="window.print()">LAGRE BILDE</button>
+            <button class="btn-clear" onclick="clearCurrentRoute()">NULLSTILL RUTE</button>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -125,8 +129,10 @@
         let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
         function unlock() {
-            const val = document.getElementById('pwInput').value;
+            const pwField = document.getElementById('pwInput');
+            const val = pwField.value;
             if (val === HEMMELIG_PASSORD) {
+                pwField.value = ""; // Tømmer feltet for å fjerne iOS "angre"-minnet
                 document.getElementById('login-screen').style.display = 'none';
                 initMap();
             } else {
@@ -137,15 +143,12 @@
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
             
-            // ENDRING: Lagt til brikke-bufring (className) og crossOrigin for bedre offline-støtte i nettleseren
             L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
                 attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
                 crossOrigin: true
             }).addTo(map);
             
             path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
-            
-            // NYTT: Eget merke for hvor brukeren faktisk står akkurat nå
             userMarker = L.circleMarker([0, 0], { radius: 8, color: '#ffffff', fillColor: '#007bff', fillOpacity: 1, weight: 3 }).addTo(map);
         }
 
@@ -154,12 +157,10 @@
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'inline-block';
             
-            // ENDRING: Sikrer at skjermen IKKE skrur seg av (forhindrer at telefonen kveler GPS-en)
             if ('wakeLock' in navigator) {
                 try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.log("WakeLock feilet"); }
             }
             
-            // ENDRING: Fjernet timeout og maximumAge for å tvinge telefonen til å hente ferske punkter konstant
             watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
                 enableHighAccuracy: true
             });
@@ -186,23 +187,47 @@
             }
         }
 
+        // NY FUNKSJON: Nullstiller kartet og dataene uten å laste inn siden på nytt
+        function clearCurrentRoute() {
+            if(confirm("Vil du slette gjeldende rute og nullstille alle tellere?")) {
+                // Hvis sporingen er på, stopper vi den først
+                if (isTracking) {
+                    stopTracking();
+                }
+
+                // Nullstill variabler
+                coords = [];
+                totalDist = 0;
+                totalGain = 0;
+                lastAlt = null;
+                tourData = [["Tid", "Lat", "Lon", "Høyde"]];
+
+                // Oppdater skjermtekst
+                document.getElementById('dist').innerText = "0.00";
+                document.getElementById('steps').innerText = "0";
+                document.getElementById('gain').innerText = "0";
+                document.getElementById('elev').innerText = "--";
+
+                // Tøm den blå streken på kartet
+                if (path) {
+                    path.setLatLngs([]);
+                }
+            }
+        }
+
         function update(pos) {
             if (!isTracking) return;
             const { latitude, longitude, altitude, accuracy } = pos.coords;
             
-            // ENDRING 1: Slappet av på nøyaktighets-filteret litt (fra 20m til 35m). 
-            // I tøft terreng/skog kan GPS-en bikke 20m, og da ville den gamle koden ignorert turen din fullstendig.
             if (accuracy > 35) return; 
 
             const newPos = [latitude, longitude];
-            userMarker.setLatLng(newPos); // Oppdaterer blå prikk
+            userMarker.setLatLng(newPos); 
 
             if (coords.length > 0) {
                 const lastPos = L.latLng(coords[coords.length - 1]);
                 const dist = lastPos.distanceTo(L.latLng(newPos));
                 
-                // ENDRING 2: Justert støyfilteret. Hvis du går rolig i motbakke, beveger du deg ofte under 2 meter per sekund. 
-                // Endret fra 2m til 1m for å fange opp rolig gange. Økte makshopp fra 50m til 150m (i tilfelle du har vært i en tunell/lomme).
                 if (dist > 150 || dist < 1.5) return; 
 
                 totalDist += (dist / 1000);
@@ -212,7 +237,7 @@
             
             if (altitude !== null) {
                 document.getElementById('elev').innerText = Math.round(altitude);
-                if (lastAlt !== null && (altitude - lastAlt) > 1.5) { // Justert støy på høydemeter
+                if (lastAlt !== null && (altitude - lastAlt) > 1.5) { 
                     totalGain += (altitude - lastAlt);
                     document.getElementById('gain').innerText = Math.round(totalGain);
                 }
