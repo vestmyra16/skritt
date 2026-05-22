@@ -132,7 +132,7 @@
             const pwField = document.getElementById('pwInput');
             const val = pwField.value;
             if (val === HEMMELIG_PASSORD) {
-                pwField.value = ""; // Tømmer feltet for å fjerne iOS "angre"-minnet
+                pwField.value = ""; 
                 document.getElementById('login-screen').style.display = 'none';
                 initMap();
             } else {
@@ -187,28 +187,22 @@
             }
         }
 
-        // NY FUNKSJON: Nullstiller kartet og dataene uten å laste inn siden på nytt
         function clearCurrentRoute() {
             if(confirm("Vil du slette gjeldende rute og nullstille alle tellere?")) {
-                // Hvis sporingen er på, stopper vi den først
                 if (isTracking) {
                     stopTracking();
                 }
-
-                // Nullstill variabler
                 coords = [];
                 totalDist = 0;
                 totalGain = 0;
                 lastAlt = null;
                 tourData = [["Tid", "Lat", "Lon", "Høyde"]];
 
-                // Oppdater skjermtekst
                 document.getElementById('dist').innerText = "0.00";
                 document.getElementById('steps').innerText = "0";
                 document.getElementById('gain').innerText = "0";
                 document.getElementById('elev').innerText = "--";
 
-                // Tøm den blå streken på kartet
                 if (path) {
                     path.setLatLngs([]);
                 }
@@ -248,6 +242,15 @@
             path.setLatLngs(coords);
             map.setView(newPos);
             tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
+        }
+
+        // --- HER ER REGISTRERINGSKODEN FOR SERVICE WORKEREN ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => console.log('Tursporer Service Worker registrert!', reg.scope))
+                    .catch((err) => console.error('Service Worker feilet:', err));
+            });
         }
     </script>
 </body>
