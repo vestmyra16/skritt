@@ -126,7 +126,7 @@
         let totalGain = 0;
         let lastAlt = null;
         let isTracking = false;
-        let tourData = [["Tid", "Lat", "Lon", "Høyde"]];
+        let tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]]; // Lagt til nøyaktighet for debugging
 
         function unlock() {
             const pwField = document.getElementById('pwInput');
@@ -141,6 +141,7 @@
         }
 
         function initMap() {
+            // Starter i Nordland
             map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
             
             L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
@@ -161,8 +162,11 @@
                 try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.log("WakeLock feilet"); }
             }
             
-            watchId = navigator.geolocation.watchPosition(update, err => console.log(err), {
-                enableHighAccuracy: true
+            // OPPGRADERT GPS-KONFIGURASJON: Tvinger ferske data og gir 10 sekunders beregningstid
+            watchId = navigator.geolocation.watchPosition(update, err => console.log("GPS-feil:", err.message), {
+                enableHighAccuracy: true,
+                maximumAge: 0, 
+                timeout: 10000 
             });
         }
 
@@ -175,8 +179,8 @@
         }
 
         function resetTour() {
-            if(confirm("Vil du avslutte turen og starte på nytt?")) {
-                let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(",")).join("\n");
+            if(confirm("Vil du lagre turen og starte på nytt?")) {
+                let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(";")).join("\n"); // Endret til semikolon for Excel i Norge
                 let encodedUri = encodeURI(csvContent);
                 let link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
@@ -196,7 +200,7 @@
                 totalDist = 0;
                 totalGain = 0;
                 lastAlt = null;
-                tourData = [["Tid", "Lat", "Lon", "Høyde"]];
+                tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]];
 
                 document.getElementById('dist').innerText = "0.00";
                 document.getElementById('steps').innerText = "0";
@@ -213,7 +217,8 @@
             if (!isTracking) return;
             const { latitude, longitude, altitude, accuracy } = pos.coords;
             
-            if (accuracy > 35) return; 
+            // STRENGERE FILTER: Godtar kun data hvis mobilen er 95% sikker på at den er innenfor 20 meter.
+            if (accuracy > 20) return; 
 
             const newPos = [latitude, longitude];
             userMarker.setLatLng(newPos); 
@@ -222,6 +227,7 @@
                 const lastPos = L.latLng(coords[coords.length - 1]);
                 const dist = lastPos.distanceTo(L.latLng(newPos));
                 
+                // Ignorerer hopp på over 150m (GPS-hopp) eller mikrobevegelser under 1.5m (stå i ro-støy)
                 if (dist > 150 || dist < 1.5) return; 
 
                 totalDist += (dist / 1000);
@@ -241,15 +247,15 @@
             coords.push(newPos);
             path.setLatLngs(coords);
             map.setView(newPos);
-            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, altitude || 0]);
+            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, Math.round(altitude || 0), Math.round(accuracy)]);
         }
 
-        // --- HER ER REGISTRERINGSKODEN FOR SERVICE WORKEREN ---
+        // --- REGISTRERING AV SERVICE WORKER (OFFLINE KART) ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then((reg) => console.log('Tursporer Service Worker registrert!', reg.scope))
-                    .catch((err) => console.error('Service Worker feilet:', err));
+                    .then((reg) => console.log('Tursporer: Offline-kart aktivert!', reg.scope))
+                    .catch((err) => console.error('Feil med offline-kart:', err));
             });
         }
     </script>
