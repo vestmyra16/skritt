@@ -112,7 +112,7 @@
             <button id="resetBtn" class="btn-new" onclick="resetTour()">NY TUR (CSV)</button>
         </div>
         <div class="btn-group" style="width: auto; gap: 10px;">
-            <button class="btn-print" onclick="window.print()">LAGRE BILDE</button>
+            <button class="btn-print" onclick="saveRouteLocally()">LAGRE RUTE</button>
             <button class="btn-clear" onclick="clearCurrentRoute()">NULLSTILL RUTE</button>
         </div>
     </div>
@@ -126,7 +126,7 @@
         let totalGain = 0;
         let lastAlt = null;
         let isTracking = false;
-        let tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]]; // Lagt til nøyaktighet for debugging
+        let tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]]; 
 
         function unlock() {
             const pwField = document.getElementById('pwInput');
@@ -151,6 +151,45 @@
             
             path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
             userMarker = L.circleMarker([0, 0], { radius: 8, color: '#ffffff', fillColor: '#007bff', fillOpacity: 1, weight: 3 }).addTo(map);
+
+            // NYTT: Sjekk om vi har en lagret rute i minnet når kartet åpnes
+            const savedData = localStorage.getItem("tursporerData");
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    coords = data.coords || [];
+                    totalDist = data.totalDist || 0;
+                    totalGain = data.totalGain || 0;
+                    tourData = data.tourData || [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]];
+
+                    // Oppdater tellerne
+                    document.getElementById('dist').innerText = totalDist.toFixed(2);
+                    document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+                    document.getElementById('gain').innerText = Math.round(totalGain);
+
+                    // Tegn ruten på kartet
+                    if (coords.length > 0) {
+                        path.setLatLngs(coords);
+                        const lastPos = coords[coords.length - 1];
+                        userMarker.setLatLng(lastPos);
+                        map.setView(lastPos, 14); // Sentrerer på der du slapp
+                    }
+                } catch(e) { 
+                    console.error("Kunne ikke laste lagret rute", e); 
+                }
+            }
+        }
+
+        // NYTT: Funksjon for å lagre ruten
+        function saveRouteLocally() {
+            const dataToSave = {
+                coords: coords,
+                totalDist: totalDist,
+                totalGain: totalGain,
+                tourData: tourData
+            };
+            localStorage.setItem("tursporerData", JSON.stringify(dataToSave));
+            alert("Ruten er lagret! Du kan trygt lukke siden og fortsette senere. 💾");
         }
 
         async function startTracking() {
@@ -162,7 +201,6 @@
                 try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.log("WakeLock feilet"); }
             }
             
-            // OPPGRADERT GPS-KONFIGURASJON: Tvinger ferske data og gir 10 sekunders beregningstid
             watchId = navigator.geolocation.watchPosition(update, err => console.log("GPS-feil:", err.message), {
                 enableHighAccuracy: true,
                 maximumAge: 0, 
@@ -180,13 +218,16 @@
 
         function resetTour() {
             if(confirm("Vil du lagre turen og starte på nytt?")) {
-                let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(";")).join("\n"); // Endret til semikolon for Excel i Norge
+                let csvContent = "data:text/csv;charset=utf-8," + tourData.map(e => e.join(";")).join("\n"); 
                 let encodedUri = encodeURI(csvContent);
                 let link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
                 link.setAttribute("download", "tur_logg.csv");
                 document.body.appendChild(link);
                 link.click();
+                
+                // Slett minnet ved ny tur også
+                localStorage.removeItem("tursporerData");
                 location.reload(); 
             }
         }
@@ -196,6 +237,10 @@
                 if (isTracking) {
                     stopTracking();
                 }
+                
+                // NYTT: Sletter lagret data fra nettleserens minne
+                localStorage.removeItem("tursporerData");
+
                 coords = [];
                 totalDist = 0;
                 totalGain = 0;
@@ -217,7 +262,6 @@
             if (!isTracking) return;
             const { latitude, longitude, altitude, accuracy } = pos.coords;
             
-            // STRENGERE FILTER: Godtar kun data hvis mobilen er 95% sikker på at den er innenfor 20 meter.
             if (accuracy > 20) return; 
 
             const newPos = [latitude, longitude];
@@ -227,7 +271,6 @@
                 const lastPos = L.latLng(coords[coords.length - 1]);
                 const dist = lastPos.distanceTo(L.latLng(newPos));
                 
-                // Ignorerer hopp på over 150m (GPS-hopp) eller mikrobevegelser under 1.5m (stå i ro-støy)
                 if (dist > 150 || dist < 1.5) return; 
 
                 totalDist += (dist / 1000);
@@ -250,7 +293,6 @@
             tourData.push([new Date().toLocaleTimeString(), latitude, longitude, Math.round(altitude || 0), Math.round(accuracy)]);
         }
 
-        // --- REGISTRERING AV SERVICE WORKER (OFFLINE KART) ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
