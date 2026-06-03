@@ -1,9 +1,10 @@
 <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tursporer Pro</title>
+    <title>Tursporer Pro v3.0</title>
     
     <link rel="apple-touch-icon" href="icon_ny_v2.png">
     <link rel="icon" type="image/png" href="icon_ny_v2.png">
@@ -98,7 +99,7 @@
 
     <div class="overlay header-stats">
         <div class="stat-box"><span class="stat-val" id="dist">0.00</span><span class="stat-label">KM</span></div>
-        <div class="stat-box"><span class="stat-val" id="steps">0</span><span class="stat-label">SKRITT</span></div>
+        <div class="stat-box"><span class="stat-val" id="steps">0</span><span class="stat-label">REELLE SKRITT</span></div>
         <div class="stat-box"><span class="stat-val" id="elev">--</span><span class="stat-label">M.O.H</span></div>
         <div class="stat-box"><span class="stat-val" id="gain">0</span><span class="stat-label">STIGNING</span></div>
     </div>
@@ -124,9 +125,15 @@
         let coords = [];
         let totalDist = 0;
         let totalGain = 0;
+        let realSteps = 0; // Holder på ekte sensortellingsskritt
         let lastAlt = null;
         let isTracking = false;
-        let tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]]; 
+        let tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet", "Skritt"]]; 
+
+        // Akselerometer-variabler for skrittelling
+        let lastAcceleration = { x: 0, y: 0, z: 0 };
+        let shakeThreshold = 11.5; // Fysisk terskelverdi for å detektere et skritt (justerbar)
+        let lastStepTime = 0;
 
         function unlock() {
             const pwField = document.getElementById('pwInput');
@@ -135,13 +142,13 @@
                 pwField.value = ""; 
                 document.getElementById('login-screen').style.display = 'none';
                 initMap();
+                beOmSensorTilgang(); // Be om tilgang til iPhone-sensorer
             } else {
                 alert("Feil passord!");
             }
         }
 
         function initMap() {
-            // Starter i Nordland
             map = L.map('map', { zoomControl: false }).setView([67.33, 15.40], 13);
             
             L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
@@ -152,7 +159,6 @@
             path = L.polyline([], { color: '#007bff', weight: 6, opacity: 0.8 }).addTo(map);
             userMarker = L.circleMarker([0, 0], { radius: 8, color: '#ffffff', fillColor: '#007bff', fillOpacity: 1, weight: 3 }).addTo(map);
 
-            // NYTT: Sjekk om vi har en lagret rute i minnet når kartet åpnes
             const savedData = localStorage.getItem("tursporerData");
             if (savedData) {
                 try {
@@ -160,19 +166,18 @@
                     coords = data.coords || [];
                     totalDist = data.totalDist || 0;
                     totalGain = data.totalGain || 0;
-                    tourData = data.tourData || [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]];
+                    realSteps = data.realSteps || 0; // Henter lagrede sensorskritt
+                    tourData = data.tourData || [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet", "Skritt"]];
 
-                    // Oppdater tellerne
                     document.getElementById('dist').innerText = totalDist.toFixed(2);
-                    document.getElementById('steps').innerText = Math.round(totalDist * 1315);
+                    document.getElementById('steps').innerText = realSteps;
                     document.getElementById('gain').innerText = Math.round(totalGain);
 
-                    // Tegn ruten på kartet
                     if (coords.length > 0) {
                         path.setLatLngs(coords);
                         const lastPos = coords[coords.length - 1];
                         userMarker.setLatLng(lastPos);
-                        map.setView(lastPos, 14); // Sentrerer på der du slapp
+                        map.setView(lastPos, 14);
                     }
                 } catch(e) { 
                     console.error("Kunne ikke laste lagret rute", e); 
@@ -180,16 +185,50 @@
             }
         }
 
-        // NYTT: Funksjon for å lagre ruten
+        // iPhone krever eksplisitt tillatelse for å bruke bevegelsessensorer
+        function beOmSensorTilgang() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('devicemotion', haandterBevegelse, true);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('devicemotion', haandterBevegelse, true);
+            }
+        }
+
+        // Fysisk skrittellings-algoritme basert på akselerometeret
+        function haandterBevegelse(event) {
+            if (!isTracking) return;
+
+            let acc = event.accelerationIncludingGravity;
+            if (!acc || acc.x === null) return;
+
+            // Beregn samlet bevegelseskraft (vektorlengde)
+            let samletKraft = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+            let noraverendeTid = new Date().getTime();
+
+            // Sjekk om rystelsen overskrider grensen og at det er minst 250ms siden forrige skritt (hindrer dobbelttelling)
+            if (samletKraft > shakeThreshold && (noraverendeTid - lastStepTime) > 250) {
+                realSteps++;
+                document.getElementById('steps').innerText = realSteps;
+                lastStepTime = noraverendeTid;
+            }
+        }
+
         function saveRouteLocally() {
             const dataToSave = {
                 coords: coords,
                 totalDist: totalDist,
                 totalGain: totalGain,
+                realSteps: realSteps, // Lagrer de ekte fysiske skrittene
                 tourData: tourData
             };
             localStorage.setItem("tursporerData", JSON.stringify(dataToSave));
-            alert("Ruten er lagret! Du kan trygt lukke siden og fortsette senere. 💾");
+            alert("Ruten og skrittene er lagret trygt lokalt! 💾");
         }
 
         async function startTracking() {
@@ -214,6 +253,7 @@
             if (wakeLock) { wakeLock.release(); wakeLock = null; }
             document.getElementById('startBtn').style.display = 'inline-block';
             document.getElementById('stopBtn').style.display = 'none';
+            saveRouteLocally(); // Auto-lagrer sensordata når du stopper
         }
 
         function resetTour() {
@@ -226,7 +266,6 @@
                 document.body.appendChild(link);
                 link.click();
                 
-                // Slett minnet ved ny tur også
                 localStorage.removeItem("tursporerData");
                 location.reload(); 
             }
@@ -234,27 +273,23 @@
 
         function clearCurrentRoute() {
             if(confirm("Vil du slette gjeldende rute og nullstille alle tellere?")) {
-                if (isTracking) {
-                    stopTracking();
-                }
+                if (isTracking) stopTracking();
                 
-                // NYTT: Sletter lagret data fra nettleserens minne
                 localStorage.removeItem("tursporerData");
 
                 coords = [];
                 totalDist = 0;
                 totalGain = 0;
+                realSteps = 0;
                 lastAlt = null;
-                tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet"]];
+                tourData = [["Tid", "Lat", "Lon", "Høyde", "Nøyaktighet", "Skritt"]];
 
                 document.getElementById('dist').innerText = "0.00";
                 document.getElementById('steps').innerText = "0";
                 document.getElementById('gain').innerText = "0";
                 document.getElementById('elev').innerText = "--";
 
-                if (path) {
-                    path.setLatLngs([]);
-                }
+                if (path) path.setLatLngs([]);
             }
         }
 
@@ -275,7 +310,6 @@
 
                 totalDist += (dist / 1000);
                 document.getElementById('dist').innerText = totalDist.toFixed(2);
-                document.getElementById('steps').innerText = Math.round(totalDist * 1315);
             }
             
             if (altitude !== null) {
@@ -290,7 +324,7 @@
             coords.push(newPos);
             path.setLatLngs(coords);
             map.setView(newPos);
-            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, Math.round(altitude || 0), Math.round(accuracy)]);
+            tourData.push([new Date().toLocaleTimeString(), latitude, longitude, Math.round(altitude || 0), Math.round(accuracy), realSteps]);
         }
 
         if ('serviceWorker' in navigator) {
